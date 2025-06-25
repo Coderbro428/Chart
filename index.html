@@ -134,15 +134,17 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        output: `full_data_component_${symbol}`,
-                        output_unfiltered: `full_data_component_${symbol}`,
-                        inputs: [{
-                            id: 'stock_symbol_input',
-                            property: 'value',
-                            value: symbol
-                        }],
-                        changedProps: ['stock_symbol_input.value']
-                    })
+                        output: "graph-container.children",
+                        outputs: { id: "graph-container", property: "children" },
+                       inputs: [
+                          { id: "submit-button", property: "n_clicks", value: 3 },
+                          { id: "chart-toggle", property: "value", value: "daily" }
+        ],
+        changedPropIds: ["submit-button.n_clicks"],
+        parsedChangedPropsIds: ["submit-button.n_clicks"],
+        state: [
+          { id: "symbol-input", property: "value", value: symbol }
+        ]
                 });
 
                 if (!response.ok) {
