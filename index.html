@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vivek's Technical Analysis</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+
+  <style>
+    /* Custom styles for body and chart, using Tailwind where possible */
+    body {
+      background-color: #111; /* Dark background */
+      color: #eee; /* Light text */
+      font-family: 'Inter', sans-serif; /* Modern font */
+      margin: 0;
+      padding: 20px;
+      transition: all 0.3s ease-in-out; /* Smooth transition for full screen */
+    }
+    #chart {
+      width: 100%;
+      height: 80vh;
+      min-height: 400px; /* Ensure a minimum height */
+      transition: all 0.3s ease-in-out; /* Smooth transition for full screen */
+    }
+    /* Basic styling for loading spinner (kept for other potential uses, though not for chart loading now) */
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid #3498db;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: translateY(-20px); }
+    }
+
+    /* Full screen specific styles */
+    body.chart-fullscreen {
+      overflow: hidden; /* Hide scrollbars when full screen */
+      padding: 0; /* Remove padding */
+    }
+
+    body.chart-fullscreen #chart-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1000; /* Ensure it's on top */
+      background-color: #111; /* Match body background */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 10px; /* Small padding for full screen chart */
+      box-sizing: border-box; /* Include padding in width/height */
+    }
+
+    body.chart-fullscreen #chart {
+      width: 100%; /* Fill parent container */
+      height: 100%; /* Fill parent container */
+      margin: auto; /* Center the chart */
+    }
+
+    /* Hide other elements when chart is full screen */
+    body.chart-fullscreen #main-header,
+    body.chart-fullscreen .input-container,
+    body.chart-fullscreen #top-right-controls, /* Hide the top-right controls */
+    body.chart-fullscreen #messageContainer,
+    body.chart-fullscreen #buySellBanner, /* Hide buy-sell banner (now at bottom) */
+    body.chart-fullscreen #liquidityMapContainer, /* Hide liquidity map link */
+    body.chart-fullscreen #chukulProfileContainer /* Hide Chukul Profile button */
+    {
+      display: none;
+    }
+
+    /* Styles for the full screen exit button when chart is full screen */
+    body.chart-fullscreen #exitFullscreenBtn {
+        display: block; /* Show the exit button */
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 1001;
+        padding: 10px 15px;
+        background-color: #dc2626; /* Red color for exit */
+        color: white;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    /* Marquee Text Styles */
+    .marquee-container {
+      overflow: hidden;
+      white-space: nowrap;
+      box-sizing: border-box;
+      background-color: #2d3748; /* Darker background for marquee */
+      color: #fff;
+      padding: 8px 0;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin-bottom: 1.5rem; /* Matches mb-6 (24px) from Tailwind */
+      position: relative; /* For absolute positioning of text */
+      height: 40px; /* Fixed height for the banner */
+    }
+
+    .marquee-text {
+      display: inline-block;
+      padding-left: 100%; /* Start text off-screen to the right */
+      animation: marquee 20s linear infinite; /* Adjust duration as needed */
+    }
+
+    @keyframes marquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); } /* Move text fully off-screen to the left */
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-inter p-5">
+  <h1 id="main-header" class="text-3xl font-bold text-center mb-6">📊 Vivek's Technical Analysis</h1>
+
+  <div id="top-right-controls" class="fixed top-5 right-5 z-50 flex flex-col items-end space-y-3">
+    <div class="toggle-container flex items-center justify-end space-x-2 bg-gray-800 p-2 rounded-lg shadow-lg">
+      <span class="text-lg text-gray-300">Daily</span>
+      <label for="chartToggle" class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" id="chartToggle" class="sr-only peer">
+        <div class="w-14 h-8 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+      </label>
+      <span class="text-lg text-gray-300">Weekly</span>
+    </div>
+  </div>
+
+  <div class="input-container flex flex-col sm:flex-row items-center justify-center mb-6 space-y-3 sm:space-y-0 sm:space-x-3">
+    <input
+      id="symbolInput"
+      type="text"
+      placeholder="Enter stock symbol (e.g., Umhl)"
+      onkeyup="updateLinks()" class="p-3 text-lg rounded-lg border border-gray-700 bg-gray-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-1/2 md:w-1/3"
+    />
+    <button
+      onclick="loadChart()"
+      class="px-6 py-3 text-lg font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 w-full sm:w-auto"
+    >
+      Load Chart
+    </button>
+    <div id="chukulProfileContainer" class="text-center">
+      <a id="chukulProfileButton" href="#" target="_blank"
+         class="inline-block px-6 py-3 text-lg font-semibold rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-75 disabled:opacity-50 disabled:cursor-not-allowed"
+         disabled>
+        View Chukul Profile
+      </a>
+    </div>
+  </div>
+
+  <div id="liquidityMapContainer" class="text-center mb-6">
+    <a id="liquidityMapButton" href="#" target="_blank"
+       class="inline-block px-6 py-3 text-lg font-semibold rounded-lg bg-teal-600 hover:bg-teal-700 text-white shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-75 disabled:opacity-50 disabled:cursor-not-allowed"
+       disabled>
+      View Liquidity Map
+    </a>
+  </div>
+
+  <div id="messageContainer" class="text-center text-red-400 mb-4 text-sm"></div>
+
+  <div id="chart-container" class="relative bg-gray-800 rounded-lg shadow-xl p-4 mb-6">
+    <div id="chart"></div>
+    <button
+        id="fullscreenBtn"
+        onclick="toggleFullScreenChart()"
+        class="absolute top-4 right-4 px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-md shadow-md transition duration-200 ease-in-out"
+        title="Toggle Full Screen"
+    >
+        Full Screen
+    </button>
+    <button
+        id="exitFullscreenBtn"
+        onclick="toggleFullScreenChart()"
+        class="hidden"
+    >
+        Exit Full Screen
+    </button>
+  </div>
+
+  <div id="buySellBanner" class="marquee-container">
+    <span class="marquee-text">Loading Market Scan Results...</span>
+  </div>
+
+
+  <script>
+    // Base URL for your proxy server
+    const PROXY_BASE_URL = "http://localhost:5000";
+
+    // Function to display messages to the user
+    function displayMessage(message, type = 'error') {
+      const messageContainer = document.getElementById('messageContainer');
+      messageContainer.textContent = message;
+      if (type === 'error') {
+        messageContainer.classList.remove('text-green-400', 'text-blue-400');
+        messageContainer.classList.add('text-red-400');
+      } else if (type === 'info') {
+        messageContainer.classList.remove('text-red-400', 'text-green-400');
+        messageContainer.classList.add('text-blue-400');
+      } else {
+        messageContainer.classList.remove('text-red-400', 'text-blue-400');
+        messageContainer.classList.add('text-green-400');
+      }
+    }
+
+    async function loadChart() {
+      const symbolInput = document.getElementById('symbolInput');
+      const chartToggle = document.getElementById('chartToggle');
+      const symbol = symbolInput.value.trim();
+      displayMessage('');
+
+      if (!symbol) {
+        displayMessage("Please enter a stock symbol.", 'error');
+        symbolInput.focus();
+        return;
+      }
+
+      displayMessage("Loading chart data...", 'info');
+
+      const chartType = chartToggle.checked ? "weekly" : "daily";
+
+      // Payload for chart data (as per original Dash callback)
+      const payload = {
+        output: "graph-container.children",
+        outputs: { id: "graph-container", property: "children" },
+        inputs: [
+          { id: "submit-button", property: "n_clicks", value: 3 },
+          { id: "chart-toggle", property: "value", value: chartType }
+        ],
+        changedPropIds: ["submit-button.n_clicks"],
+        parsedChangedPropsIds: ["submit-button.n_clicks"],
+        state: [
+          { id: "symbol-input", property: "value", value: symbol }
+        ]
+      };
+
+      try {
+        const res = await fetch(`${PROXY_BASE_URL}/proxy`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
+        const data = await res.json();
+        const figure = data.response["graph-container"].children.props.figure;
+
+        console.log("Plotly Figure Data and Layout:", figure);
+
+        if (figure && figure.data && figure.layout) {
+          Plotly.newPlot('chart', figure.data, figure.layout);
+          displayMessage(`Chart loaded successfully for ${symbol} (${chartType} data).`, 'info');
+        } else {
+          displayMessage("Error: Invalid chart data received from proxy. Check console for details.", 'error');
+          console.error("Received data structure was missing figure, data, or layout:", data);
+        }
+      } catch (err) {
+        displayMessage(`Failed to load chart: ${err.message}. Ensure your proxy server is running and configured correctly.`, 'error');
+        console.error("Fetch error:", err);
+      }
+    }
+
+    /**
+     * Toggles the chart between normal and full-screen mode.
+     */
+    function toggleFullScreenChart() {
+        const body = document.body;
+        const chartDiv = document.getElementById('chart');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const exitFullscreenBtn = document.getElementById('exitFullscreenBtn');
+        const topRightControls = document.getElementById('top-right-controls');
+
+        // References to elements to hide/show
+        const mainHeader = document.getElementById('main-header');
+        const inputContainer = document.querySelector('.input-container');
+        const buySellBanner = document.getElementById('buySellBanner'); // Now at bottom
+        const liquidityMapContainer = document.getElementById('liquidityMapContainer');
+        const messageContainer = document.getElementById('messageContainer');
+        const chukulProfileContainer = document.getElementById('chukulProfileContainer');
+
+
+        if (body.classList.contains('chart-fullscreen')) {
+            // Exit full screen
+            body.classList.remove('chart-fullscreen');
+            fullscreenBtn.style.display = 'block';
+            exitFullscreenBtn.style.display = 'none';
+
+            // Show other elements
+            mainHeader.style.display = 'block';
+            inputContainer.style.display = 'flex';
+            topRightControls.style.display = 'flex';
+            buySellBanner.style.display = 'block';
+            liquidityMapContainer.style.display = 'block';
+            messageContainer.style.display = 'block';
+            chukulProfileContainer.style.display = 'block';
+        } else {
+            // Enter full screen
+            body.classList.add('chart-fullscreen');
+            fullscreenBtn.style.display = 'none';
+            exitFullscreenBtn.style.display = 'block';
+
+            // Hide other elements
+            mainHeader.style.display = 'none';
+            inputContainer.style.display = 'none';
+            topRightControls.style.display = 'none';
+            buySellBanner.style.display = 'none';
+            liquidityMapContainer.style.display = 'none';
+            messageContainer.style.display = 'none';
+            chukulProfileContainer.style.display = 'none';
+        }
+
+        // Relayout Plotly chart to adapt to new container size
+        setTimeout(() => {
+            if (chartDiv._fullLayout) {
+                Plotly.relayout(chartDiv, {
+                    autosize: true,
+                    'xaxis.autorange': true,
+                    'yaxis.autorange': true
+                }).then(() => {
+                    Plotly.Plots.resize(chartDiv);
+                });
+            }
+        }, 300);
+    }
+
+    /**
+     * Updates the Buy/Sell banner periodically with scrolling text.
+     * This simulates the Dash callback with output "buy-sell-banner.children"
+     * and input "interval-component.n_intervals".
+     */
+    async function updateBuySellBanner() {
+      const buySellBanner = document.getElementById('buySellBanner');
+      const marqueeTextSpan = buySellBanner.querySelector('.marquee-text');
+
+      // Payload for buy-sell banner, matching user's provided structure
+      const payload = {
+        output: 'buy-sell-banner.children',
+        outputs: {
+          id: 'buy-sell-banner',
+          property: 'children',
+        },
+        inputs: [
+          {
+            id: 'interval-component',
+            property: 'n_intervals',
+            value: Math.floor(Date.now() / 1000), // Use current timestamp as n_intervals
+          },
+        ],
+        changedPropIds: [
+          'interval-component.n_intervals', // Changed to n_intervals for logical interval trigger
+        ],
+        parsedChangedPropsIds: [
+          'interval-component.n_intervals', // Changed to n_intervals
+        ],
+        state: [],
+      };
+
+      try {
+        const res = await fetch(`${PROXY_BASE_URL}/proxy`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
+        const data = await res.json();
+        // Parse the nested response structure as provided by the user
+        const bannerContent = data.response["buy-sell-banner"]?.children?.props?.children;
+
+        if (bannerContent) {
+          marqueeTextSpan.textContent = bannerContent;
+        } else {
+          console.error("Buy/Sell banner content not found in proxy response:", data);
+          marqueeTextSpan.textContent = "Market Scan Results: N/A";
+        }
+      } catch (err) {
+        console.error("Error updating Buy/Sell banner:", err);
+        marqueeTextSpan.textContent = "Market Scan Results: Error fetching";
+      }
+    }
+
+    /**
+     * Updates the Liquidity Map link and Chukul Profile link based on the current stock symbol.
+     */
+    function updateLinks() {
+      const symbolInput = document.getElementById('symbolInput');
+      const liquidityMapButton = document.getElementById('liquidityMapButton');
+      const chukulProfileButton = document.getElementById('chukulProfileButton');
+      const symbol = symbolInput.value.trim().toUpperCase(); // Ensure symbol is uppercase for URL
+
+      // Liquidity Map URL
+      const BASE_LIQUIDITY_MAP_URL = "https://milanpandey1008.com.np/stockcipher/cipher_liquidity_suite/liquidity_map?symbol=";
+      if (symbol) {
+        liquidityMapButton.href = `${BASE_LIQUIDITY_MAP_URL}${symbol}`;
+        liquidityMapButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        liquidityMapButton.disabled = false;
+      } else {
+        liquidityMapButton.href = "#";
+        liquidityMapButton.classList.add('opacity-50', 'cursor-not-allowed');
+        liquidityMapButton.disabled = true;
+      }
+
+      // Chukul Profile URL
+      const BASE_CHUKUL_PROFILE_URL = "https://chukul.com/stock-profile?symbol=";
+      if (symbol) {
+        chukulProfileButton.href = `${BASE_CHUKUL_PROFILE_URL}${symbol}`;
+        chukulProfileButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        chukulProfileButton.disabled = false;
+      } else {
+        chukulProfileButton.href = "#";
+        chukulProfileButton.classList.add('opacity-50', 'cursor-not-allowed');
+        chukulProfileButton.disabled = true;
+      }
+    }
+
+
+    // Initialize functions on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      updateBuySellBanner(); // Initial call for banner
+      updateLinks(); // Initial call to set disabled state for links if no symbol
+
+      // Set interval for periodic banner updates (e.g., every 5 seconds)
+      setInterval(updateBuySellBanner, 5000);
+    });
+  </script>
+</body>
+</html>
